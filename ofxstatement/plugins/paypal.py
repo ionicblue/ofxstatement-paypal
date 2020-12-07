@@ -45,51 +45,18 @@ def atof(string, loc=None):
 
 class PayPalStatementParser(StatementParser):
     bank_id = 'PayPal'
-    date_format = '%Y/%m/%d'
+    date_format = '%d/%m/%Y'
     valid_header = [
         u"Date",
         u"Time",
-        u"Time Zone",
+        u"TimeZone",
         u"Name",
         u"Type",
         u"Status",
         u"Currency",
-        u"Gross",
-        u"Fee",
-        u"Net",
-        u"From Email Address",
-        u"To Email Address",
-        u"Transaction ID",
-        u"Counterparty Status",
-        u"Address Status",
-        u"Item Title",
-        u"Item ID",
-        u"Shipping and Handling Amount",
-        u"Insurance Amount",
-        u"Sales Tax",
-        u"Option 1 Name",
-        u"Option 1 Value",
-        u"Option 2 Name",
-        u"Option 2 Value",
-        u"Auction Site",
-        u"Buyer ID",
-        u"Item URL",
-        u"Closing Date",
-        u"Escrow Id",
-        u"Invoice Id",
-        u"Reference Txn ID",
-        u"Invoice Number",
-        u"Custom Number",
+        u"Amount",
         u"Receipt ID",
         u"Balance",
-        u"Address Line 1",
-        u"Address Line 2/District/Neighborhood",
-        u"Town/City",
-        u"State/Province/Region/County/Territory/Prefecture/Republic",
-        u"Zip/Postal Code",
-        u"Country",
-        u"Contact Phone Number",
-        u"",
     ]
 
     def __init__(self, fin, account_id, currency, encoding=None, locale=None, analyze=False):
@@ -125,7 +92,7 @@ class PayPalStatementParser(StatementParser):
 
     def validate(self):
         """
-        Validate to ensure csv has the same header we expect.
+        VNamealidate to ensure csv has the same header we expect.
         """
 
         expected = self.valid_header
@@ -144,16 +111,12 @@ class PayPalStatementParser(StatementParser):
 
     def parse_record(self, row):
 
-        id_idx = self.valid_header.index("Transaction ID")
         date_idx = self.valid_header.index("Date")
-        memo_idx = self.valid_header.index("Name")
-        refnum_idx = self.valid_header.index("Reference Txn ID")
-        amount_idx = self.valid_header.index("Gross")
-        payee_idx = self.valid_header.index("To Email Address")
-        title_idx = self.valid_header.index("Item Title")
+        memo_idx = self.valid_header.index("Type")
+        amount_idx = self.valid_header.index("Amount")
+        payee_idx = self.valid_header.index("Name")
 
         stmt_line = StatementLine()
-        stmt_line.id = row[id_idx]
         stmt_line.date = datetime.strptime(row[date_idx], self.date_format)
         stmt_line.memo = row[memo_idx]
 
@@ -163,13 +126,14 @@ class PayPalStatementParser(StatementParser):
             ]
 
             payee = row[payee_idx]
-            if payee and (payee.lower() == 'steamgameseu@steampowered.com'):
-                memo_parts.append(row[title_idx])
+            # if payee and (payee.lower() == 'steamgameseu@steampowered.com'):
+            #     memo_parts.append(row[title_idx])
 
             stmt_line.memo = ' / '.join(filter(bool, memo_parts))
 
-        stmt_line.refnum = row[refnum_idx]
         stmt_line.amount = atof(row[amount_idx].replace(" ", ""), self.locale)
+        stmt_line.payee = payee
+        stmt_line.id = generate_transaction_id(stmt_line)
 
         return stmt_line
 
