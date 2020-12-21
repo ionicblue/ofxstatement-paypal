@@ -92,7 +92,7 @@ class PayPalStatementParser(StatementParser):
 
     def validate(self):
         """
-        VNamealidate to ensure csv has the same header we expect.
+        Validate to ensure csv has the same header we expect.
         """
 
         expected = self.valid_header
@@ -110,7 +110,7 @@ class PayPalStatementParser(StatementParser):
             yield row
 
     def parse_record(self, row):
-
+        print(row[self.valid_header.index("Currency")])
         date_idx = self.valid_header.index("Date")
         memo_idx = self.valid_header.index("Type")
         amount_idx = self.valid_header.index("Amount")
@@ -129,10 +129,10 @@ class PayPalStatementParser(StatementParser):
             # if payee and (payee.lower() == 'steamgameseu@steampowered.com'):
             #     memo_parts.append(row[title_idx])
 
-            stmt_line.memo = ' / '.join(filter(bool, memo_parts))
+            # stmt_line.memo = ' / '.join(filter(bool, memo_parts))
 
         stmt_line.amount = atof(row[amount_idx].replace(" ", ""), self.locale)
-        stmt_line.payee = payee
+        stmt_line.payee = row[payee_idx]
         stmt_line.id = generate_transaction_id(stmt_line)
 
         return stmt_line
