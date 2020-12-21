@@ -15,8 +15,9 @@ Configuration
 PayPal exports data for all currencies in one file. This means you must define different configurations for different
 currencies. See below for examples.
 
-It worth mentioning that there is ``analyze`` option that enables simple analyzing that modifies memo in attempt
-to make it more relevant e.g. it picks ``Item Title`` for any steam purchases:
+It's worth mentioning that there is an ``analyze`` option that enables simple
+analyzing that modifies memo in attempt to make it more relevant e.g. it
+picks ``Item Title`` for any steam purchases:
 
 ``WWW.Steampowered.com`` -> ``WWW.Steampowered.com / Hero Siege``
 
