@@ -11,7 +11,17 @@ from ofxstatement.parser import StatementParser
 from ofxstatement.plugin import Plugin
 from ofxstatement.statement import Statement, StatementLine, generate_transaction_id
 
-
+DATE       = u"Date"
+TIME       = u"Time"
+TIMEZONE   = u"TimeZone"
+NAME       = u"Name"
+TYPE       = u"Type"
+STATUS     = u"Status"
+CURRENCY   = u"Currency"
+AMOUNT     = u"Amount"
+RECEIPT_ID = u"Receipt ID"
+BALANCE    = u"Balance"
+ 
 def take(iterable, n):
     """Return first n items of the iterable as a list."""
     return list(itertools.islice(iterable, n))
@@ -47,16 +57,16 @@ class PayPalStatementParser(StatementParser):
     bank_id = 'PayPal'
     date_format = '%d/%m/%Y'
     valid_header = [
-        u"Date",
-        u"Time",
-        u"TimeZone",
-        u"Name",
-        u"Type",
-        u"Status",
-        u"Currency",
-        u"Amount",
-        u"Receipt ID",
-        u"Balance",
+        DATE,
+        TIME,
+        TIMEZONE,
+        NAME,
+        TYPE,
+        STATUS,
+        CURRENCY,
+        AMOUNT,
+        RECEIPT_ID,
+        BALANCE,
     ]
 
     def __init__(self, fin, account_id, currency, encoding=None, locale=None, analyze=False):
@@ -65,6 +75,8 @@ class PayPalStatementParser(StatementParser):
         self.locale = locale
         self.encoding = encoding
         self.analyze = analyze
+
+        self.other_currency =[]
 
         with open(fin, 'r', encoding=self.encoding) as f:
             self.lines = f.readlines()
@@ -87,8 +99,16 @@ class PayPalStatementParser(StatementParser):
     @property
     def rows(self):
         rs = drop(self.reader, 1)
-        currency_idx = self.valid_header.index("Currency")
-        return [r for r in rs if r[currency_idx] == self.currency]
+        this_currency = []
+        currency_idx = self.valid_header.index(CURRENCY)
+        for r in rs:
+            if r[currency_idx] == self.currency]
+                this_currency.append(r)
+            else:
+                self.other_currency.append(r)
+
+        
+        
 
     def validate(self):
         """
@@ -110,11 +130,11 @@ class PayPalStatementParser(StatementParser):
             yield row
 
     def parse_record(self, row):
-        print(row[self.valid_header.index("Currency")])
-        date_idx = self.valid_header.index("Date")
-        memo_idx = self.valid_header.index("Type")
-        amount_idx = self.valid_header.index("Amount")
-        payee_idx = self.valid_header.index("Name")
+        print(row[self.valid_header.index(CURRENCY)])
+        date_idx = self.valid_header.index(DATE)
+        memo_idx = self.valid_header.index(TYPE)
+        amount_idx = self.valid_header.index(AMOUNT)
+        payee_idx = self.valid_header.index(NAME)
 
         stmt_line = StatementLine()
         stmt_line.date = datetime.strptime(row[date_idx], self.date_format)
