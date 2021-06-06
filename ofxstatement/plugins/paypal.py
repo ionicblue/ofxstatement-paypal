@@ -58,7 +58,6 @@ def atof(string, loc=None):
 
 class PayPalStatementParser(StatementParser):
     bank_id = 'PayPal'
-    date_format = '%d/%m/%Y'
     # Header of Paypal CSV export file. Order is important here.
     valid_header = [
         DATE,
@@ -80,13 +79,15 @@ class PayPalStatementParser(StatementParser):
                  encoding=None,
                  locale=None,
                  analyze=False,
-                 merge_payee=False):
+                 merge_payee=False,
+                 date_format='%d/%m/%Y'):
         self.account_id = account_id
         self.currency = currency
         self.locale = locale
         self.encoding = encoding
         self.analyze = analyze
         self.merge_payee = merge_payee
+        self.date_format = date_format
 
         self.other_currency = []
 
@@ -227,4 +228,6 @@ class PayPalPlugin(Plugin):
             if 'merge_payee' in self.settings:
                 kwargs['merge_payee'] = parse_bool(
                     self.settings.get('merge_payee'))
+            if 'date_format' in self.settings:
+                kwargs['date_format'] = self.settings.get('date_format')
         return PayPalStatementParser(fin, **kwargs)
