@@ -23,7 +23,51 @@ CURRENCY = u"Currency"
 AMOUNT = u"Amount"
 RECEIPT_ID = u"Receipt ID"
 BALANCE = u"Balance"
+GROSS = u"Gross"
+FEE = u"Fee"
+NET = u"Net"
+TIP = u"Tip"
 
+HEADER = {
+    'USD': {
+        'header': [
+            DATE,
+            TIME,
+            TIMEZONE,
+            NAME,
+            TYPE,
+            STATUS,
+            CURRENCY,
+            AMOUNT,
+            RECEIPT_ID,
+            BALANCE,
+        ],
+        'amount_column': AMOUNT
+    },
+    'EUR': {
+        'header': [
+            DATE,
+            TIME,
+            TIMEZONE,
+            NAME,
+            TYPE,
+            STATUS,
+            CURRENCY,
+            GROSS,
+            FEE,
+            NET,
+            RECEIPT_ID,
+            BALANCE,
+            TIP,
+        ],
+        'amount_column': GROSS
+    }
+}
+""" The Header information.
+
+2024-01-17: EUR and USD have different CSV schemas for crying out loud. The amount_column value is the one used for StatementLine.amount.
+
+"""
 
 def take(iterable, n):
     """Return first n items of the iterable as a list."""
@@ -59,18 +103,7 @@ def atof(string, loc=None):
 class PayPalStatementParser(StatementParser):
     bank_id = 'PayPal'
     # Header of Paypal CSV export file. Order is important here.
-    valid_header = [
-        DATE,
-        TIME,
-        TIMEZONE,
-        NAME,
-        TYPE,
-        STATUS,
-        CURRENCY,
-        AMOUNT,
-        RECEIPT_ID,
-        BALANCE,
-    ]
+    valid_header = []
 
     def __init__(self,
                  fin,
@@ -88,6 +121,7 @@ class PayPalStatementParser(StatementParser):
         self.analyze = analyze
         self.merge_payee = merge_payee
         self.date_format = date_format
+        self.valid_header = HEADER.get(currency.upper()).get('header')
 
         self.other_currency = []
 
@@ -157,7 +191,7 @@ class PayPalStatementParser(StatementParser):
     def parse_record(self, row):
         date_idx = self.valid_header.index(DATE)
         memo_idx = self.valid_header.index(TYPE)
-        amount_idx = self.valid_header.index(AMOUNT)
+        amount_idx = self.valid_header.index(HEADER.get(self.currency.upper()).get('amount_column'))
         payee_idx = self.valid_header.index(NAME)
 
         stmt_line = StatementLine()
@@ -182,8 +216,8 @@ class PayPalStatementParser(StatementParser):
         if self.merge_payee and not self.is_not_currency_conversion(row):
             matching = self.get_matching_transaction(row)
             if matching is not None:
-                stmt_line.payee = matching[self.valid_header.index(NAME)]
-                stmt_line.memo = matching[self.valid_header.index(TYPE)]
+                stmt_line.payee = matching[payee_idx]
+                stmt_line.memo = matching[memo_idx]
 
         return stmt_line
 
