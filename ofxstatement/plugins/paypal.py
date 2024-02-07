@@ -11,6 +11,63 @@ from ofxstatement.parser import StatementParser
 from ofxstatement.plugin import Plugin
 from ofxstatement.statement import Statement, StatementLine, generate_transaction_id
 
+# Constants which should match the Paypal CSV header names. Order is not
+# important here.
+DATE = u"Date"
+TIME = u"Time"
+TIMEZONE = u"TimeZone"
+NAME = u"Name"
+TYPE = u"Type"
+STATUS = u"Status"
+CURRENCY = u"Currency"
+AMOUNT = u"Amount"
+RECEIPT_ID = u"Receipt ID"
+BALANCE = u"Balance"
+GROSS = u"Gross"
+FEE = u"Fee"
+NET = u"Net"
+TIP = u"Tip"
+
+HEADER = {
+    'USD': {
+        'header': [
+            DATE,
+            TIME,
+            TIMEZONE,
+            NAME,
+            TYPE,
+            STATUS,
+            CURRENCY,
+            AMOUNT,
+            RECEIPT_ID,
+            BALANCE,
+        ],
+        'amount_column': AMOUNT
+    },
+    'EUR': {
+        'header': [
+            DATE,
+            TIME,
+            TIMEZONE,
+            NAME,
+            TYPE,
+            STATUS,
+            CURRENCY,
+            GROSS,
+            FEE,
+            NET,
+            RECEIPT_ID,
+            BALANCE,
+            TIP,
+        ],
+        'amount_column': GROSS
+    }
+}
+""" The Header information.
+
+2024-01-17: EUR and USD have different CSV schemas for crying out loud. The amount_column value is the one used for StatementLine.amount.
+
+"""
 
 def take(iterable, n):
     """Return first n items of the iterable as a list."""
@@ -45,59 +102,28 @@ def atof(string, loc=None):
 
 class PayPalStatementParser(StatementParser):
     bank_id = 'PayPal'
-    date_format = '%Y/%m/%d'
-    valid_header = [
-        u"Date",
-        u"Time",
-        u"Time Zone",
-        u"Name",
-        u"Type",
-        u"Status",
-        u"Currency",
-        u"Gross",
-        u"Fee",
-        u"Net",
-        u"From Email Address",
-        u"To Email Address",
-        u"Transaction ID",
-        u"Counterparty Status",
-        u"Address Status",
-        u"Item Title",
-        u"Item ID",
-        u"Shipping and Handling Amount",
-        u"Insurance Amount",
-        u"Sales Tax",
-        u"Option 1 Name",
-        u"Option 1 Value",
-        u"Option 2 Name",
-        u"Option 2 Value",
-        u"Auction Site",
-        u"Buyer ID",
-        u"Item URL",
-        u"Closing Date",
-        u"Escrow Id",
-        u"Invoice Id",
-        u"Reference Txn ID",
-        u"Invoice Number",
-        u"Custom Number",
-        u"Receipt ID",
-        u"Balance",
-        u"Address Line 1",
-        u"Address Line 2/District/Neighborhood",
-        u"Town/City",
-        u"State/Province/Region/County/Territory/Prefecture/Republic",
-        u"Zip/Postal Code",
-        u"Country",
-        u"Contact Phone Number",
-        u"",
-    ]
+    # Header of Paypal CSV export file. Order is important here.
+    valid_header = []
 
-    def __init__(self, fin, account_id, currency, encoding=None, locale=None, analyze=False):
+    def __init__(self,
+                 fin,
+                 account_id,
+                 currency,
+                 encoding=None,
+                 locale=None,
+                 analyze=False,
+                 merge_payee=False,
+                 date_format='%d/%m/%Y'):
         self.account_id = account_id
         self.currency = currency
         self.locale = locale
         self.encoding = encoding
         self.analyze = analyze
+        self.merge_payee = merge_payee
+        self.date_format = date_format
+        self.valid_header = HEADER.get(currency.upper()).get('header')
+
+        self.other_currency = []
 
         with open(fin, 'r', encoding=self.encoding) as f:
             self.lines = f.readlines()
@@ -120,8 +146,28 @@ class PayPalStatementParser(StatementParser):
     @property
     def rows(self):
         rs = drop(self.reader, 1)
-        currency_idx = self.valid_header.index("Currency")
-        return [r for r in rs if r[currency_idx] == self.currency]
+        currency_idx = self.valid_header.index(CURRENCY)
+        if self.merge_payee == False:
+            return [r for r in rs if r[currency_idx] == self.currency]
+        else:
+            this_currency = []
+            for r in rs:
+                if r[currency_idx] == self.currency:
+                    this_currency.append(r)
+                elif self.is_not_currency_conversion(r):
+                    self.other_currency.append(r)
+            return this_currency
+
+    def is_not_currency_conversion(self, row):
+        """
+        Return True, if the passed transaction is a real transaction to a
+        payee, and not a currency conversion transaction.
+
+        I separated this function, so that it can be easily changed to adapt
+        to future Paypal CSV changes.
+        """
+
+        return "currency conversion" not in row[self.valid_header.index(TYPE)].lower()
 
     def validate(self):
         """
@@ -143,17 +189,12 @@ class PayPalStatementParser(StatementParser):
             yield row
 
     def parse_record(self, row):
-
-        id_idx = self.valid_header.index("Transaction ID")
-        date_idx = self.valid_header.index("Date")
-        memo_idx = self.valid_header.index("Name")
-        refnum_idx = self.valid_header.index("Reference Txn ID")
-        amount_idx = self.valid_header.index("Gross")
-        payee_idx = self.valid_header.index("To Email Address")
-        title_idx = self.valid_header.index("Item Title")
+        date_idx = self.valid_header.index(DATE)
+        memo_idx = self.valid_header.index(TYPE)
+        amount_idx = self.valid_header.index(HEADER.get(self.currency.upper()).get('amount_column'))
+        payee_idx = self.valid_header.index(NAME)
 
         stmt_line = StatementLine()
-        stmt_line.id = row[id_idx]
         stmt_line.date = datetime.strptime(row[date_idx], self.date_format)
         stmt_line.memo = row[memo_idx]
 
@@ -163,15 +204,35 @@ class PayPalStatementParser(StatementParser):
             ]
 
             payee = row[payee_idx]
-            if payee and (payee.lower() == 'steamgameseu@steampowered.com'):
-                memo_parts.append(row[title_idx])
+            # if payee and (payee.lower() == 'steamgameseu@steampowered.com'):
+            #     memo_parts.append(row[title_idx])
 
-            stmt_line.memo = ' / '.join(filter(bool, memo_parts))
+            # stmt_line.memo = ' / '.join(filter(bool, memo_parts))
 
-        stmt_line.refnum = row[refnum_idx]
         stmt_line.amount = atof(row[amount_idx].replace(" ", ""), self.locale)
+        stmt_line.payee = row[payee_idx]
+        stmt_line.id = generate_transaction_id(stmt_line)
+
+        if self.merge_payee and not self.is_not_currency_conversion(row):
+            matching = self.get_matching_transaction(row)
+            if matching is not None:
+                stmt_line.payee = matching[payee_idx]
+                stmt_line.memo = matching[memo_idx]
 
         return stmt_line
+
+    def get_matching_transaction(self, row):
+        """
+        Look for a transaction in self.other_currency which has the same time
+        and date with the one passed in row.
+
+        If one is found, return it, and delete it from self.other_currency
+        """
+        for oc_row in self.other_currency:
+            if ((oc_row[self.valid_header.index(DATE)] == row[self.valid_header.index(DATE)])
+                    and (oc_row[self.valid_header.index(TIME)] == row[self.valid_header.index(TIME)])):
+                self.other_currency.remove(oc_row)
+                return oc_row
 
 
 def parse_bool(value):
@@ -198,4 +259,9 @@ class PayPalPlugin(Plugin):
                 kwargs['encoding'] = self.settings.get('encoding')
             if 'analyze' in self.settings:
                 kwargs['analyze'] = parse_bool(self.settings.get('analyze'))
+            if 'merge_payee' in self.settings:
+                kwargs['merge_payee'] = parse_bool(
+                    self.settings.get('merge_payee'))
+            if 'date_format' in self.settings:
+                kwargs['date_format'] = self.settings.get('date_format')
         return PayPalStatementParser(fin, **kwargs)
